@@ -37,7 +37,7 @@ app.post("/generate-link", (req, res) => {
         expiry: Date.now() + 15 * 60 * 1000 // 15 minutes
     };
 
-    const baseUrl = "https://grand-hotteok-2e515c.netlify.app/";
+    const baseUrl = "https://grand-hotteok-2e515c.netlify.app";
 
     res.json({
         token,
