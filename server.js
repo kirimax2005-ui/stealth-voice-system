@@ -1,14 +1,14 @@
 const express = require("express");
-const crypto = require("crypto");
 const http = require("http");
 const { Server } = require("socket.io");
+const crypto = require("crypto");
 const cors = require("cors");
-
-console.log("🔥 CORRECT SERVER.JS IS RUNNING");
 
 const app = express();
 app.use(express.json());
-app.use(cors({ origin: "*" }));
+app.use(cors());
+
+app.use(express.static("public"));
 
 const server = http.createServer(app);
 
@@ -19,35 +19,23 @@ const io = new Server(server, {
     }
 });
 
-// Token storage
+// Ephemeral storage
+let rooms = {};
 let tokens = {};
 
-// ✅ Root
-app.get("/", (req, res) => {
-    res.send("FINAL SERVER WORKING ✅");
-});
-
-// 🔐 Generate Token
-app.get("/generate-token", (req, res) => {
-    const token = Math.random().toString(36).substring(2, 10);
-    res.json({ token });
-});
-
-// 🔗 Generate Link
+// 🔐 Generate Link
 app.post("/generate-link", (req, res) => {
     const token = crypto.randomBytes(4).toString("hex");
 
     tokens[token] = {
-        used: false,
-        expiry: Date.now() + 120000
+        expiry: Date.now() + 15 * 60 * 1000 // 15 min
     };
 
-    const baseUrl =
-        process.env.FRONTEND_URL || "https://silent-voice-system.netlify.app";
+    const baseUrl = process.env.BASE_URL || "https://stealth-voice-system.netlify.app/";
 
     res.json({
-        link: `${baseUrl}/join/${token}`,
-        token: token
+        token,
+        link: `${baseUrl}/join/${token}`
     });
 });
 
@@ -55,31 +43,36 @@ app.post("/generate-link", (req, res) => {
 app.post("/verify-token", (req, res) => {
     const { token } = req.body;
 
-    if (!tokens[token]) {
-        return res.json({ success: false, message: "Invalid Token" });
-    }
-
-    if (tokens[token].used) {
-        return res.json({ success: false, message: "Already Used" });
-    }
+    if (!tokens[token]) return res.json({ success: false });
 
     if (Date.now() > tokens[token].expiry) {
-        return res.json({ success: false, message: "Expired" });
+        delete tokens[token];
+        return res.json({ success: false });
     }
-
-    tokens[token].used = true;
 
     res.json({ success: true });
 });
 
-// 📡 WebRTC Signaling with ROOMS (IMPORTANT FIX)
+// 📡 WebRTC signaling
 io.on("connection", (socket) => {
-    console.log("User connected:", socket.id);
 
-    // Join room using token
-    socket.on("join-room", (token) => {
+    socket.on("join", (token) => {
         socket.join(token);
-        console.log(`User ${socket.id} joined room ${token}`);
+
+        if (!rooms[token]) rooms[token] = [];
+        rooms[token].push(socket.id);
+
+        // When 2 users join → start
+        if (rooms[token].length === 2) {
+            io.to(rooms[token][0]).emit("ready", true);
+            io.to(rooms[token][1]).emit("ready", false);
+        }
+
+        // Auto cleanup
+        setTimeout(() => {
+            delete rooms[token];
+            delete tokens[token];
+        }, 15 * 60 * 1000);
     });
 
     socket.on("offer", ({ token, offer }) => {
@@ -90,18 +83,19 @@ io.on("connection", (socket) => {
         socket.to(token).emit("answer", answer);
     });
 
-    socket.on("ice-candidate", ({ token, candidate }) => {
-        socket.to(token).emit("ice-candidate", candidate);
+    socket.on("ice", ({ token, candidate }) => {
+        socket.to(token).emit("ice", candidate);
     });
 
     socket.on("disconnect", () => {
-        console.log("User disconnected:", socket.id);
+        for (let t in rooms) {
+            rooms[t] = rooms[t].filter(id => id !== socket.id);
+            if (rooms[t].length === 0) delete rooms[t];
+        }
     });
 });
 
-// 🚀 Start server
 const PORT = process.env.PORT || 10000;
-
 server.listen(PORT, () => {
-    console.log(`🚀 Server running on port ${PORT}`);
+    console.log("🚀 Server running on port", PORT);
 });

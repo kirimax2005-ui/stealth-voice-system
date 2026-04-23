@@ -1,228 +1,137 @@
 <!DOCTYPE html>
 <html>
-
 <head>
-    <title>Invisible Calling</title>
-
-    <style>
-        body {
-            font-family: Arial;
-            background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
-            color: white;
-            text-align: center;
-        }
-
-        .card {
-            background: #1e1e1e;
-            padding: 25px;
-            border-radius: 15px;
-            width: 320px;
-            margin: 80px auto;
-            box-shadow: 0 0 15px rgba(0, 0, 0, 0.6);
-        }
-
-        button {
-            padding: 10px 20px;
-            margin: 5px;
-            border-radius: 8px;
-            border: none;
-            cursor: pointer;
-        }
-
-        .green {
-            background: #25D366;
-            color: white;
-        }
-
-        .red {
-            background: red;
-            color: white;
-        }
-
-        input {
-            padding: 10px;
-            width: 90%;
-            border-radius: 8px;
-            border: none;
-            margin-top: 10px;
-        }
-
-        .call-screen {
-            display: none;
-        }
-
-        .avatar {
-            width: 90px;
-            height: 90px;
-            border-radius: 50%;
-            background: #555;
-            margin: 20px auto;
-            animation: pulse 1.5s infinite;
-        }
-
-        @keyframes pulse {
-            0% {
-                transform: scale(1);
-            }
-
-            50% {
-                transform: scale(1.1);
-            }
-
-            100% {
-                transform: scale(1);
-            }
-        }
-
-        .status {
-            color: lightgreen;
-        }
-    </style>
+  <title>Indie Secure Call</title>
 </head>
 
-<body>
+<body style="background:#111;color:white;text-align:center;font-family:sans-serif">
 
-    <!-- HOME -->
-    <div id="home" class="card">
-        <h2>🔐 Invisible Call</h2>
+<h2>🔐 Indie Call</h2>
 
-        <button class="green" onclick="generateToken()">Generate Token</button>
-        <p id="token"></p>
+<div id="home">
+    <button onclick="generateLink()">Generate Call Link</button>
+    <p id="link"></p>
 
-        <button class="green" onclick="generateLink()">Generate Link</button>
-        <p id="link"></p>
+    <input id="tokenInput" placeholder="Enter Token">
+    <br><br>
+    <button onclick="verify()">Join Call</button>
+</div>
 
-        <input id="inputToken" placeholder="Enter Token">
-        <button class="green" onclick="verifyToken()">Start Call</button>
-    </div>
+<div id="call" style="display:none;">
+    <h3 id="status">Connecting...</h3>
+    <audio id="audio" autoplay></audio>
+</div>
 
-    <!-- CALL UI -->
-    <div id="callScreen" class="card call-screen">
-        <h2>📞 Secure Call</h2>
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 
-        <div class="avatar"></div>
+<script>
+const SERVER = "https://stealth-voice-system.onrender.com"; // 🔥 PUT YOUR REAL BACKEND URL
 
-        <h3>Anonymous User</h3>
-        <p id="status" class="status">Connecting...</p>
+const socket = io(SERVER);
 
-        <audio id="remoteAudio" autoplay></audio>
+let pc;
+let stream;
+let token;
 
-        <button class="red" onclick="endCall()">End Call</button>
-    </div>
+// 🔗 Generate Link
+async function generateLink() {
+    const res = await fetch(`${SERVER}/generate-link`, { method: "POST" });
+    const data = await res.json();
 
-    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+    document.getElementById("link").innerText = data.link;
+    document.getElementById("tokenInput").value = data.token;
+}
 
-    <script>
-        const SERVER = "https://stealth-voice-system.onrender.com";
-        const socket = io(SERVER);
+// ✅ Verify Token
+async function verify() {
+    token = document.getElementById("tokenInput").value;
 
-        let peer;
-        let localStream;
+    const res = await fetch(`${SERVER}/verify-token`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token })
+    });
 
-        // 🎯 Generate Token (FIXED)
-        async function generateToken() {
-            const res = await fetch(`${SERVER}/generate-token`); // ✅ GET
-            const data = await res.json();
-            document.getElementById("token").innerText = "Token: " + data.token;
-        }
+    const data = await res.json();
 
-        // 🔗 Generate Link
-        async function generateLink() {
-            const res = await fetch(`${SERVER}/generate-link`, {
-                method: "POST"
-            });
+    if (data.success) startCall();
+    else alert("Invalid / Expired Token ❌");
+}
 
-            const data = await res.json();
+// 📡 Start Call
+async function startCall() {
 
-            document.getElementById("link").innerText = data.link;
-            document.getElementById("inputToken").value = data.token;
-        }
+    document.getElementById("home").style.display = "none";
+    document.getElementById("call").style.display = "block";
 
-        // ✅ Verify Token
-        async function verifyToken() {
-            const token = document.getElementById("inputToken").value;
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
-            const res = await fetch(`${SERVER}/verify-token`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ token })
-            });
-
-            const data = await res.json();
-
-            if (data.success) startCall();
-            else alert("Invalid / Expired Token ❌");
-        }
-
-        // 📡 Start Call
-        const token = document.getElementById("inputToken").value;
-        socket.emit("join-room", token);
-        async function startCall() {
-
-            document.getElementById("home").style.display = "none";
-            document.getElementById("callScreen").style.display = "block";
-
-            localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-
-            peer = new RTCPeerConnection({
-                iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
-            });
-
-            localStream.getTracks().forEach(track => peer.addTrack(track, localStream));
-
-            // 🎧 Receive audio
-            peer.ontrack = event => {
-                document.getElementById("remoteAudio").srcObject = event.streams[0];
-                document.getElementById("status").innerText = "In Call 🟢";
-            };
-
-            // ICE
-            peer.onicecandidate = e => {
-                if (e.candidate) socket.emit("ice-candidate", e.candidate);
-            };
-
-            socket.on("ice-candidate", candidate => {
-                if (peer) peer.addIceCandidate(new RTCIceCandidate(candidate));
-            });
-
-            // OFFER RECEIVER
-            socket.on("offer", async offer => {
-                await peer.setRemoteDescription(new RTCSessionDescription(offer));
-
-                const answer = await peer.createAnswer();
-                await peer.setLocalDescription(answer);
-
-                socket.emit("answer", answer);
-            });
-
-            // ANSWER RECEIVER
-            socket.on("answer", async answer => {
-                await peer.setRemoteDescription(new RTCSessionDescription(answer));
-            });
-
-            // ✅ ONLY CALLER SENDS OFFER
-            if (!window.location.pathname.includes("/join")) {
-                const offer = await peer.createOffer();
-                await peer.setLocalDescription(offer);
-                socket.emit("offer", { token, offer });
+    pc = new RTCPeerConnection({
+        iceServers: [
+            { urls: "stun:stun.l.google.com:19302" },
+            {
+                urls: "turn:openrelay.metered.ca:80",
+                username: "openrelayproject",
+                credential: "openrelayproject"
             }
-        }
+        ]
+    });
 
-        // ❌ End Call
-        function endCall() {
-            if (peer) peer.close();
-            location.reload();
-        }
+    stream.getTracks().forEach(track => pc.addTrack(track, stream));
 
-        // 🔍 Auto-fill token from link
-        window.onload = () => {
-            const path = window.location.pathname.split("/");
-            if (path[1] === "join") {
-                document.getElementById("inputToken").value = path[2];
-            }
-        };
-    </script>
+    pc.ontrack = (e) => {
+        document.getElementById("audio").srcObject = e.streams[0];
+        document.getElementById("status").innerText = "Connected 🟢";
+    };
+
+    pc.onicecandidate = (e) => {
+        if (e.candidate) {
+            socket.emit("ice", { token, candidate: e.candidate });
+        }
+    };
+
+    pc.oniceconnectionstatechange = () => {
+        console.log("ICE:", pc.iceConnectionState);
+    };
+
+    socket.emit("join", token);
+
+    socket.on("ready", async (isCaller) => {
+        if (isCaller) {
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+            socket.emit("offer", { token, offer });
+        }
+    });
+
+    socket.on("offer", async (offer) => {
+        await pc.setRemoteDescription(offer);
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        socket.emit("answer", { token, answer });
+    });
+
+    socket.on("answer", async (answer) => {
+        await pc.setRemoteDescription(answer);
+    });
+
+    socket.on("ice", async (candidate) => {
+        try {
+            await pc.addIceCandidate(candidate);
+        } catch (e) {
+            console.error(e);
+        }
+    });
+}
+
+// 🔍 Auto-fill token from link
+window.onload = () => {
+    const path = window.location.pathname.split("/");
+    if (path[1] === "join") {
+        document.getElementById("tokenInput").value = path[2];
+    }
+};
+</script>
 
 </body>
-
 </html>
