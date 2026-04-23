@@ -8,7 +8,13 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
+// Serve frontend if needed
 app.use(express.static("public"));
+
+// ✅ FIX: Root route (prevents "Cannot GET /")
+app.get("/", (req, res) => {
+    res.send("✅ Indie Call Server is running");
+});
 
 const server = http.createServer(app);
 
@@ -28,7 +34,7 @@ app.post("/generate-link", (req, res) => {
     const token = crypto.randomBytes(4).toString("hex");
 
     tokens[token] = {
-        expiry: Date.now() + 15 * 60 * 1000 // 15 min
+        expiry: Date.now() + 15 * 60 * 1000 // 15 minutes
     };
 
     const baseUrl = "https://silent-voice-system.netlify.app";
@@ -62,13 +68,13 @@ io.on("connection", (socket) => {
         if (!rooms[token]) rooms[token] = [];
         rooms[token].push(socket.id);
 
-        // When 2 users join → start
+        // Allow only 2 users
         if (rooms[token].length === 2) {
             io.to(rooms[token][0]).emit("ready", true);
             io.to(rooms[token][1]).emit("ready", false);
         }
 
-        // Auto cleanup
+        // Auto cleanup after expiry
         setTimeout(() => {
             delete rooms[token];
             delete tokens[token];
@@ -96,6 +102,7 @@ io.on("connection", (socket) => {
 });
 
 const PORT = process.env.PORT || 10000;
+
 server.listen(PORT, () => {
     console.log("🚀 Server running on port", PORT);
 });
