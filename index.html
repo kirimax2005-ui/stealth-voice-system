@@ -126,9 +126,18 @@ async function startCall() {
 
 // 🔍 Auto-fill token from link
 window.onload = () => {
-    const path = window.location.pathname.split("/");
-    if (path[1] === "join") {
-        document.getElementById("tokenInput").value = path[2];
+    const url = window.location.pathname;
+    const parts = url.split("/");
+
+    if (parts.length >= 3 && parts[1] === "join") {
+        const token = parts[2];
+
+        document.getElementById("tokenInput").value = token;
+
+        // 🔥 Auto join instantly
+        setTimeout(() => {
+            verify();
+        }, 500);
     }
 };
 </script>
