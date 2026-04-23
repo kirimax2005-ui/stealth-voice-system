@@ -1,146 +1,159 @@
 <!DOCTYPE html>
 <html>
+
 <head>
-  <title>Indie Secure Call</title>
+    <title>Indie Secure Call</title>
 </head>
 
 <body style="background:#111;color:white;text-align:center;font-family:sans-serif">
 
-<h2>🔐 Indie Call</h2>
+    <h2>🔐 Indie Call</h2>
 
-<div id="home">
-    <button onclick="generateLink()">Generate Call Link</button>
-    <p id="link"></p>
+    <div id="home">
+        <button onclick="generateLink()">Generate Call Link</button>
+        <p id="link"></p>
 
-    <input id="tokenInput" placeholder="Enter Token">
-    <br><br>
-    <button onclick="verify()">Join Call</button>
-</div>
+        <input id="tokenInput" placeholder="Enter Token">
+        <br><br>
+        <button onclick="verify()">Join Call</button>
+    </div>
 
-<div id="call" style="display:none;">
-    <h3 id="status">Connecting...</h3>
-    <audio id="audio" autoplay></audio>
-</div>
+    <div id="call" style="display:none;">
+        <h3 id="status">Connecting...</h3>
+        <audio id="audio" autoplay></audio>
+    </div>
 
-<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 
-<script>
-const SERVER = "https://stealth-voice-system.onrender.com"; // 🔥 PUT YOUR REAL BACKEND URL
+    <script>
+        const SERVER = "https://stealth-voice-system.onrender.com"; // 🔥 PUT YOUR REAL BACKEND URL
 
-const socket = io(SERVER);
+        const socket = io(SERVER);
 
-let pc;
-let stream;
-let token;
+        let pc;
+        let stream;
+        let token;
 
-// 🔗 Generate Link
-async function generateLink() {
-    const res = await fetch(`${SERVER}/generate-link`, { method: "POST" });
-    const data = await res.json();
+        // 🔗 Generate Link
+        async function generateLink() {
+            const res = await fetch(`${SERVER}/generate-link`, { method: "POST" });
+            const data = await res.json();
 
-    document.getElementById("link").innerText = data.link;
-    document.getElementById("tokenInput").value = data.token;
-}
+            document.getElementById("link").innerText = data.link;
+            document.getElementById("tokenInput").value = data.token;
+        }
 
-// ✅ Verify Token
-async function verify() {
-    token = document.getElementById("tokenInput").value;
+        // ✅ Verify Token
+        async function verify() {
+            token = document.getElementById("tokenInput").value;
 
-    const res = await fetch(`${SERVER}/verify-token`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token })
-    });
+            const res = await fetch(`${SERVER}/verify-token`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ token })
+            });
 
-    const data = await res.json();
+            const data = await res.json();
 
-    if (data.success) startCall();
-    else alert("Invalid / Expired Token ❌");
-}
+            if (data.success) startCall();
+            else alert("Invalid / Expired Token ❌");
+        }
 
-// 📡 Start Call
-async function startCall() {
+        // 📡 Start Call
+        async function startCall() {
+            token = document.getElementById("tokenInput").value;
 
-    document.getElementById("home").style.display = "none";
-    document.getElementById("call").style.display = "block";
+            document.getElementById("home").style.display = "none";
+            document.getElementById("call").style.display = "block";
 
-    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
-    pc = new RTCPeerConnection({
-        iceServers: [
-            { urls: "stun:stun.l.google.com:19302" },
-            {
-                urls: "turn:openrelay.metered.ca:80",
-                username: "openrelayproject",
-                credential: "openrelayproject"
+            pc = new RTCPeerConnection({
+                iceServers: [
+                    { urls: "stun:stun.l.google.com:19302" },
+                    {
+                        urls: "turn:openrelay.metered.ca:80",
+                        username: "openrelayproject",
+                        credential: "openrelayproject"
+                    }
+                ]
+            });
+
+            stream.getTracks().forEach(track => pc.addTrack(track, stream));
+
+            pc.ontrack = (e) => {
+                document.getElementById("audio").srcObject = e.streams[0];
+                document.getElementById("status").innerText = "Connected 🟢";
+            };
+
+            pc.onicecandidate = (e) => {
+                if (e.candidate) {
+                    socket.emit("ice", { token, candidate: e.candidate });
+                }
+            };
+
+            pc.oniceconnectionstatechange = () => {
+                console.log("ICE:", pc.iceConnectionState);
+            };
+
+            socket.emit("join", token);
+
+            socket.on("ready", async (isCaller) => {
+                if (isCaller) {
+                    const offer = await pc.createOffer();
+                    await pc.setLocalDescription(offer);
+                    socket.emit("offer", { token, offer });
+                }
+            });
+
+            socket.on("offer", async (offer) => {
+                await pc.setRemoteDescription(offer);
+                const answer = await pc.createAnswer();
+                await pc.setLocalDescription(answer);
+                socket.emit("answer", { token, answer });
+            });
+
+            socket.on("answer", async (answer) => {
+                await pc.setRemoteDescription(answer);
+            });
+
+            socket.on("ice", async (candidate) => {
+                try {
+                    await pc.addIceCandidate(candidate);
+                } catch (e) {
+                    console.error(e);
+                }
+            });
+        }
+
+        // 🔍 Auto-fill token from link
+        window.onload = async () => {
+            const parts = window.location.pathname.split("/");
+
+            if (parts.length >= 3 && parts[1] === "join") {
+                const token = parts[2];
+
+                // Fill input
+                document.getElementById("tokenInput").value = token;
+
+                // 🔥 Directly verify and start call
+                const res = await fetch(`${SERVER}/verify-token`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ token })
+                });
+
+                const data = await res.json();
+
+                if (data.success) {
+                    startCall(); // 🚀 auto start
+                } else {
+                    alert("Invalid / Expired Link ❌");
+                }
             }
-        ]
-    });
-
-    stream.getTracks().forEach(track => pc.addTrack(track, stream));
-
-    pc.ontrack = (e) => {
-        document.getElementById("audio").srcObject = e.streams[0];
-        document.getElementById("status").innerText = "Connected 🟢";
-    };
-
-    pc.onicecandidate = (e) => {
-        if (e.candidate) {
-            socket.emit("ice", { token, candidate: e.candidate });
-        }
-    };
-
-    pc.oniceconnectionstatechange = () => {
-        console.log("ICE:", pc.iceConnectionState);
-    };
-
-    socket.emit("join", token);
-
-    socket.on("ready", async (isCaller) => {
-        if (isCaller) {
-            const offer = await pc.createOffer();
-            await pc.setLocalDescription(offer);
-            socket.emit("offer", { token, offer });
-        }
-    });
-
-    socket.on("offer", async (offer) => {
-        await pc.setRemoteDescription(offer);
-        const answer = await pc.createAnswer();
-        await pc.setLocalDescription(answer);
-        socket.emit("answer", { token, answer });
-    });
-
-    socket.on("answer", async (answer) => {
-        await pc.setRemoteDescription(answer);
-    });
-
-    socket.on("ice", async (candidate) => {
-        try {
-            await pc.addIceCandidate(candidate);
-        } catch (e) {
-            console.error(e);
-        }
-    });
-}
-
-// 🔍 Auto-fill token from link
-window.onload = () => {
-    const url = window.location.pathname;
-    const parts = url.split("/");
-
-    if (parts.length >= 3 && parts[1] === "join") {
-        const token = parts[2];
-
-        document.getElementById("tokenInput").value = token;
-
-        // 🔥 Auto join instantly
-        setTimeout(() => {
-            verify();
-        }, 500);
-    }
-};
-</script>
+        };
+    </script>
 
 </body>
+
 </html>
