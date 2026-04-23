@@ -25,134 +25,133 @@
 
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 
-    <script>
-        const SERVER = "https://stealth-voice-system.onrender.com"; // 🔥 PUT YOUR REAL BACKEND URL
+<script>
+const SERVER = "https://stealth-voice-system.onrender.com"; // your backend
 
-        const socket = io(SERVER);
+const socket = io(SERVER);
 
-        let pc;
-        let stream;
-        let token;
+let pc;
+let stream;
+let token = null;
 
-        // 🔗 Generate Link
-        async function generateLink() {
-            const res = await fetch(`${SERVER}/generate-link`, { method: "POST" });
-            const data = await res.json();
+// 🔗 Generate Link
+async function generateLink() {
+    const res = await fetch(`${SERVER}/generate-link`, { method: "POST" });
+    const data = await res.json();
 
-            document.getElementById("link").innerText = data.link;
-            document.getElementById("tokenInput").value = data.token;
-        }
+    document.getElementById("link").innerText = data.link;
+    document.getElementById("tokenInput").value = data.token;
+}
 
-        // ✅ Verify Token
-        async function verify() {
-            token = document.getElementById("tokenInput").value;
+// ✅ Manual Join
+async function verify() {
+    token = document.getElementById("tokenInput").value;
 
-            const res = await fetch(`${SERVER}/verify-token`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ token })
-            });
+    if (!token) return alert("Enter token");
 
-            const data = await res.json();
+    const res = await fetch(`${SERVER}/verify-token`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token })
+    });
 
-            if (data.success) startCall();
-            else alert("Invalid / Expired Token ❌");
-        }
+    const data = await res.json();
 
-        // 📡 Start Call
-        async function startCall() {
-            token = document.getElementById("tokenInput").value;
+    if (data.success) {
+        startCall();
+    } else {
+        alert("Invalid / Expired Token ❌");
+    }
+}
 
-            document.getElementById("home").style.display = "none";
-            document.getElementById("call").style.display = "block";
+// 🚀 Start Call
+async function startCall() {
 
-            stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    document.getElementById("home").style.display = "none";
+    document.getElementById("call").style.display = "block";
 
-            pc = new RTCPeerConnection({
-                iceServers: [
-                    { urls: "stun:stun.l.google.com:19302" },
-                    {
-                        urls: "turn:openrelay.metered.ca:80",
-                        username: "openrelayproject",
-                        credential: "openrelayproject"
-                    }
-                ]
-            });
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
-            stream.getTracks().forEach(track => pc.addTrack(track, stream));
-
-            pc.ontrack = (e) => {
-                document.getElementById("audio").srcObject = e.streams[0];
-                document.getElementById("status").innerText = "Connected 🟢";
-            };
-
-            pc.onicecandidate = (e) => {
-                if (e.candidate) {
-                    socket.emit("ice", { token, candidate: e.candidate });
-                }
-            };
-
-            pc.oniceconnectionstatechange = () => {
-                console.log("ICE:", pc.iceConnectionState);
-            };
-
-            socket.emit("join", token);
-
-            socket.on("ready", async (isCaller) => {
-                if (isCaller) {
-                    const offer = await pc.createOffer();
-                    await pc.setLocalDescription(offer);
-                    socket.emit("offer", { token, offer });
-                }
-            });
-
-            socket.on("offer", async (offer) => {
-                await pc.setRemoteDescription(offer);
-                const answer = await pc.createAnswer();
-                await pc.setLocalDescription(answer);
-                socket.emit("answer", { token, answer });
-            });
-
-            socket.on("answer", async (answer) => {
-                await pc.setRemoteDescription(answer);
-            });
-
-            socket.on("ice", async (candidate) => {
-                try {
-                    await pc.addIceCandidate(candidate);
-                } catch (e) {
-                    console.error(e);
-                }
-            });
-        }
-
-        // 🔍 Auto-fill token from link
-        window.onload = async () => {
-            const parts = window.location.pathname.split("/");
-
-            if (parts.length >= 3 && parts[1] === "join") {
-                const token = parts[2];
-
-                // Fill input
-                document.getElementById("tokenInput").value = token;
-
-                // 🔥 Directly verify and start call
-                const res = await fetch(`${SERVER}/verify-token`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ token })
-                });
-
-                const data = await res.json();
-
-                if (data.success) {
-                    startCall(); // 🚀 auto start
-                } else {
-                    alert("Invalid / Expired Link ❌");
-                }
+    pc = new RTCPeerConnection({
+        iceServers: [
+            { urls: "stun:stun.l.google.com:19302" },
+            {
+                urls: "turn:openrelay.metered.ca:80",
+                username: "openrelayproject",
+                credential: "openrelayproject"
             }
-        };
-    </script>
+        ]
+    });
+
+    stream.getTracks().forEach(track => pc.addTrack(track, stream));
+
+    pc.ontrack = (e) => {
+        document.getElementById("audio").srcObject = e.streams[0];
+        document.getElementById("status").innerText = "Connected 🟢";
+    };
+
+    pc.onicecandidate = (e) => {
+        if (e.candidate) {
+            socket.emit("ice", { token, candidate: e.candidate });
+        }
+    };
+
+    socket.emit("join", token);
+
+    socket.on("ready", async (isCaller) => {
+        if (isCaller) {
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+            socket.emit("offer", { token, offer });
+        }
+    });
+
+    socket.on("offer", async (offer) => {
+        await pc.setRemoteDescription(offer);
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        socket.emit("answer", { token, answer });
+    });
+
+    socket.on("answer", async (answer) => {
+        await pc.setRemoteDescription(answer);
+    });
+
+    socket.on("ice", async (candidate) => {
+        try {
+            await pc.addIceCandidate(candidate);
+        } catch (e) {
+            console.error(e);
+        }
+    });
+}
+
+// 🔥 AUTO JOIN (FINAL FIX)
+window.addEventListener("DOMContentLoaded", async () => {
+    const parts = window.location.pathname.split("/");
+
+    if (parts[1] === "join" && parts[2]) {
+        token = parts[2];
+
+        document.getElementById("tokenInput").value = token;
+
+        // verify immediately
+        const res = await fetch(`${SERVER}/verify-token`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ token })
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+            startCall(); // 🚀 GUARANTEED CALL START
+        } else {
+            alert("Invalid or expired link ❌");
+        }
+    }
+});
+</script>
 
 </body>
 
