@@ -4,6 +4,7 @@
 <head>
     <title>Indie Secure Call</title>
 </head>
+<audio id="audio" autoplay></audio>
 
 <body style="background:#111;color:white;text-align:center;font-family:sans-serif">
 
@@ -66,6 +67,7 @@ async function verify() {
 
 // 🚀 Start Call
 async function startCall() {
+    console.log("ICE STATE:", pc.iceConnectionState);
 
     document.getElementById("home").style.display = "none";
     document.getElementById("call").style.display = "block";
@@ -74,13 +76,16 @@ async function startCall() {
 
     pc = new RTCPeerConnection({
         iceServers: [
-            { urls: "stun:stun.l.google.com:19302" },
-            {
-                urls: "turn:openrelay.metered.ca:80",
-                username: "openrelayproject",
-                credential: "openrelayproject"
-            }
-        ]
+    { urls: "stun:stun.l.google.com:19302" },
+    {
+        urls: [
+            "turn:relay1.expressturn.com:3478",
+            "turn:relay1.expressturn.com:80"
+        ],
+        username: "ef8R0F4N4R9E6T",
+        credential: "Yd1R9Z9X"
+    }
+]
     });
 
     stream.getTracks().forEach(track => pc.addTrack(track, stream));
