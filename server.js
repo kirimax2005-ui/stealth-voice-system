@@ -31,7 +31,7 @@ app.post("/generate-link", (req, res) => {
         expiry: Date.now() + 15 * 60 * 1000 // 15 min
     };
 
-    const baseUrl = process.env.BASE_URL || "https://stealth-voice-system.netlify.app/";
+    const baseUrl = "https://silent-voice-system.netlify.app";
 
     res.json({
         token,
