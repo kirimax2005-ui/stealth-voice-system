@@ -28,7 +28,7 @@ app.post("/generate-link", (req, res) => {
         expiry: Date.now() + 15 * 60 * 1000
     };
 
-    const baseUrl = "https://grand-hotteok-2e515c.netlify.app";
+    const baseUrl = "https://stealth-voice.netlify.app";
 
     res.json({
         token,
