@@ -8,13 +8,6 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-app.use(express.static("public"));
-
-// ✅ Root route
-app.get("/", (req, res) => {
-    res.send("✅ Indie Call Server Running");
-});
-
 const server = http.createServer(app);
 
 const io = new Server(server, {
@@ -27,7 +20,7 @@ const io = new Server(server, {
 let rooms = {};
 let tokens = {};
 
-// 🔐 Generate Link (FIXED URL)
+// 🔐 Generate link
 app.post("/generate-link", (req, res) => {
     const token = crypto.randomBytes(4).toString("hex");
 
@@ -35,7 +28,6 @@ app.post("/generate-link", (req, res) => {
         expiry: Date.now() + 15 * 60 * 1000
     };
 
-    // ✅ IMPORTANT: NO trailing slash
     const baseUrl = "https://grand-hotteok-2e515c.netlify.app";
 
     res.json({
