@@ -8,12 +8,11 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-// Serve frontend if needed
 app.use(express.static("public"));
 
-// ✅ FIX: Root route (prevents "Cannot GET /")
+// ✅ Root route
 app.get("/", (req, res) => {
-    res.send("✅ Indie Call Server is running");
+    res.send("✅ Indie Call Server Running");
 });
 
 const server = http.createServer(app);
@@ -25,18 +24,18 @@ const io = new Server(server, {
     }
 });
 
-// Ephemeral storage
 let rooms = {};
 let tokens = {};
 
-// 🔐 Generate Link
+// 🔐 Generate Link (FIXED URL)
 app.post("/generate-link", (req, res) => {
     const token = crypto.randomBytes(4).toString("hex");
 
     tokens[token] = {
-        expiry: Date.now() + 15 * 60 * 1000 // 15 minutes
+        expiry: Date.now() + 15 * 60 * 1000
     };
 
+    // ✅ IMPORTANT: NO trailing slash
     const baseUrl = "https://grand-hotteok-2e515c.netlify.app";
 
     res.json({
@@ -45,7 +44,7 @@ app.post("/generate-link", (req, res) => {
     });
 });
 
-// ✅ Verify Token
+// ✅ Verify token
 app.post("/verify-token", (req, res) => {
     const { token } = req.body;
 
@@ -68,17 +67,10 @@ io.on("connection", (socket) => {
         if (!rooms[token]) rooms[token] = [];
         rooms[token].push(socket.id);
 
-        // Allow only 2 users
         if (rooms[token].length === 2) {
             io.to(rooms[token][0]).emit("ready", true);
             io.to(rooms[token][1]).emit("ready", false);
         }
-
-        // Auto cleanup after expiry
-        setTimeout(() => {
-            delete rooms[token];
-            delete tokens[token];
-        }, 15 * 60 * 1000);
     });
 
     socket.on("offer", ({ token, offer }) => {

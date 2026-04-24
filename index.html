@@ -1,33 +1,31 @@
 <!DOCTYPE html>
 <html>
-
 <head>
-    <title>Indie Secure Call</title>
+  <title>Indie Call</title>
 </head>
-<audio id="audio" autoplay></audio>
 
 <body style="background:#111;color:white;text-align:center;font-family:sans-serif">
 
-    <h2>🔐 Indie Call</h2>
+<h2>🔐 Indie Call</h2>
 
-    <div id="home">
-        <button onclick="generateLink()">Generate Call Link</button>
-        <p id="link"></p>
+<div id="home">
+    <button onclick="generateLink()">Generate Call Link</button>
+    <p id="link"></p>
 
-        <input id="tokenInput" placeholder="Enter Token">
-        <br><br>
-        <button onclick="verify()">Join Call</button>
-    </div>
+    <input id="tokenInput" placeholder="Enter Token">
+    <br><br>
+    <button onclick="verify()">Join Call</button>
+</div>
 
-    <div id="call" style="display:none;">
-        <h3 id="status">Connecting...</h3>
-        <audio id="audio" autoplay></audio>
-    </div>
+<div id="call" style="display:none;">
+    <h3 id="status">Connecting...</h3>
+    <audio id="audio" autoplay></audio>
+</div>
 
-    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 
 <script>
-const SERVER = "https://stealth-voice-system.onrender.com"; // your backend
+const SERVER = "https://stealth-voice-system.onrender.com";
 
 const socket = io(SERVER);
 
@@ -35,7 +33,7 @@ let pc;
 let stream;
 let token = null;
 
-// 🔗 Generate Link
+// 🔗 Generate link
 async function generateLink() {
     const res = await fetch(`${SERVER}/generate-link`, { method: "POST" });
     const data = await res.json();
@@ -44,7 +42,7 @@ async function generateLink() {
     document.getElementById("tokenInput").value = data.token;
 }
 
-// ✅ Manual Join
+// ✅ Manual join
 async function verify() {
     token = document.getElementById("tokenInput").value;
 
@@ -61,31 +59,32 @@ async function verify() {
     if (data.success) {
         startCall();
     } else {
-        alert("Invalid / Expired Token ❌");
+        alert("Invalid token ❌");
     }
 }
 
-// 🚀 Start Call
+// 🚀 Start call
 async function startCall() {
-    console.log("ICE STATE:", pc.iceConnectionState);
 
     document.getElementById("home").style.display = "none";
     document.getElementById("call").style.display = "block";
 
     stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
+    console.log("STREAM:", stream);
+
     pc = new RTCPeerConnection({
         iceServers: [
-    { urls: "stun:stun.l.google.com:19302" },
-    {
-        urls: [
-            "turn:relay1.expressturn.com:3478",
-            "turn:relay1.expressturn.com:80"
-        ],
-        username: "ef8R0F4N4R9E6T",
-        credential: "Yd1R9Z9X"
-    }
-]
+            { urls: "stun:stun.l.google.com:19302" },
+            {
+                urls: [
+                    "turn:relay1.expressturn.com:3478",
+                    "turn:relay1.expressturn.com:80"
+                ],
+                username: "ef8R0F4N4R9E6T",
+                credential: "Yd1R9Z9X"
+            }
+        ]
     });
 
     stream.getTracks().forEach(track => pc.addTrack(track, stream));
@@ -99,6 +98,10 @@ async function startCall() {
         if (e.candidate) {
             socket.emit("ice", { token, candidate: e.candidate });
         }
+    };
+
+    pc.oniceconnectionstatechange = () => {
+        console.log("ICE STATE:", pc.iceConnectionState);
     };
 
     socket.emit("join", token);
@@ -131,7 +134,7 @@ async function startCall() {
     });
 }
 
-// 🔥 AUTO JOIN (FINAL FIX)
+// 🔥 AUTO JOIN FIX
 window.addEventListener("DOMContentLoaded", async () => {
     const parts = window.location.pathname.split("/");
 
@@ -140,7 +143,6 @@ window.addEventListener("DOMContentLoaded", async () => {
 
         document.getElementById("tokenInput").value = token;
 
-        // verify immediately
         const res = await fetch(`${SERVER}/verify-token`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -150,7 +152,7 @@ window.addEventListener("DOMContentLoaded", async () => {
         const data = await res.json();
 
         if (data.success) {
-            startCall(); // 🚀 GUARANTEED CALL START
+            startCall();
         } else {
             alert("Invalid or expired link ❌");
         }
@@ -159,5 +161,4 @@ window.addEventListener("DOMContentLoaded", async () => {
 </script>
 
 </body>
-
 </html>
