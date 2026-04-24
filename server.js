@@ -8,6 +8,16 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
+// ✅ Root route (fix "Cannot GET /")
+app.get("/", (req, res) => {
+    res.send("✅ Indie Call Backend Running");
+});
+
+// ✅ Health route
+app.get("/health", (req, res) => {
+    res.json({ status: "ok" });
+});
+
 const server = http.createServer(app);
 
 const io = new Server(server, {
@@ -20,7 +30,7 @@ const io = new Server(server, {
 let rooms = {};
 let tokens = {};
 
-// 🔐 Generate link
+// 🔐 Generate link (UPDATED URL)
 app.post("/generate-link", (req, res) => {
     const token = crypto.randomBytes(4).toString("hex");
 

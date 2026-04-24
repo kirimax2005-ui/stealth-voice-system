@@ -87,10 +87,8 @@ async function startCall() {
         ]
     });
 
-    // ✅ Add mic
     stream.getTracks().forEach(track => pc.addTrack(track, stream));
 
-    // 🔥 Receive remote audio
     pc.ontrack = (event) => {
         console.log("REMOTE STREAM RECEIVED ✅");
 
