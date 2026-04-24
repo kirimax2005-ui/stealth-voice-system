@@ -28,7 +28,7 @@ app.post("/generate-link", (req, res) => {
         expiry: Date.now() + 15 * 60 * 1000
     };
 
-    const baseUrl = "https://stealth-voice.netlify.app";
+    const baseUrl = "https://stealth-voice-system.vercel.app";
 
     res.json({
         token,
