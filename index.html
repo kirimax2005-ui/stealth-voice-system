@@ -3,6 +3,7 @@
 <head>
   <title>Indie Call</title>
 </head>
+<audio id="audio" autoplay playsinline></audio>
 
 <body style="background:#111;color:white;text-align:center;font-family:sans-serif">
 
@@ -32,6 +33,13 @@ const socket = io(SERVER);
 let pc;
 let stream;
 let token = null;
+
+document.body.addEventListener("click", () => {
+    const audio = document.getElementById("audio");
+    if (audio && audio.srcObject) {
+        audio.play().catch(() => {});
+    }
+});
 
 // 🔗 Generate link
 async function generateLink() {
@@ -72,6 +80,7 @@ async function startCall() {
     stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
     console.log("STREAM:", stream);
+    console.log("Tracks:", stream.getTracks());
 
     pc = new RTCPeerConnection({
         iceServers: [
@@ -90,9 +99,17 @@ async function startCall() {
     stream.getTracks().forEach(track => pc.addTrack(track, stream));
 
     pc.ontrack = (e) => {
-        document.getElementById("audio").srcObject = e.streams[0];
-        document.getElementById("status").innerText = "Connected 🟢";
-    };
+    const audio = document.getElementById("audio");
+    audio.srcObject = e.streams[0];
+
+    audio.play().then(() => {
+        console.log("🔊 Audio playing");
+    }).catch(err => {
+        console.log("Autoplay blocked, waiting for user interaction");
+    });
+
+    document.getElementById("status").innerText = "Connected 🟢";
+};
 
     pc.onicecandidate = (e) => {
         if (e.candidate) {
